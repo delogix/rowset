@@ -1,6 +1,6 @@
 # rowset
 
-rowset is a library which provides ...
+.. rowset is a library which provides ...
 
 Major additional concepts are:
 
