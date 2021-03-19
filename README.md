@@ -43,17 +43,17 @@ func SimpleQuery(db *sql.DB) {
 
     req := Request{PageIndex: 0, PageSize: 10}
 
-	sqlStr := "select personid, firstname, lastname from t_person "
-	q := NewQuery(db, sqlStr)
+    sqlStr := "select personid, firstname, lastname from t_person "
+    q := NewQuery(db, sqlStr)
 
-	
-	res := q.GetResponse(&Person{}, &req)
 
-	j, err := json.Marshal(&res)
-	if err != nil {
-		log.Println(err)
-	}
-	log.Printf("RESULT: %s", j)
+    res := q.GetResponse(&Person{}, &req)
+
+    j, err := json.Marshal(&res)
+    if err != nil {
+        log.Println(err)
+    }
+    log.Printf("RESULT: %s", j)
 
 }
 ```
