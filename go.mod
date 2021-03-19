@@ -1,4 +1,4 @@
-module github.com/delogix.de/rowset
+module github.com/delogix/rowset
 
 go 1.16
 
