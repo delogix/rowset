@@ -1,7 +1,9 @@
 # rowset
 
-rowset is a library which provides functionality for data pagination for clients sending a JSON request and on the server side a GO library handling this request
-mapping a DB Query to a GO Structure and marschalling to JSON.
+rowset is a library which provides functionality for data pagination on the clients and executing a SQL Query on the server
+* client sends a JSON request 
+* Server handles the request and executes the SQL Query
+* Server responses with a JSON rowset
 
 Major concepts are:
 
