@@ -2,9 +2,7 @@ package rowset
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
-	"log"
 	"regexp"
 	"strings"
 )
@@ -78,16 +76,20 @@ func (q *Query) AllowColumn(jsonName string, dbField string) {
 }
 
 // GetRows - Returns the response for paging and the db record set
+// the calling function of GetRows should close the DB Query
 func (q *Query) GetRows(req *Request) (*sql.Rows, error) {
 	if q.SqlStr == "" {
-		return nil, errors.New("statement is not set")
+		return nil, fmt.Errorf("statement is not set")
 	}
 	// remove white spaces
 	q.normalizeStatement()
 	q.addSearch(req.Search)
 	// rebuild statement with where filters
 	q.setWhere()
-	q.setTotalRows()
+	err := q.setTotalRows()
+	if err != nil {
+		return nil, err
+	}
 
 	// Column Sorting
 	if req.Sort != "" && req.Direction != "" {
@@ -198,12 +200,13 @@ func (q *Query) addSearch(search map[string]string) {
 	}
 }
 
-func (q *Query) setTotalRows() {
+func (q *Query) setTotalRows() error {
 	var count int
 	sqlCount := q.getCountStatement()
 	err := q.db.QueryRow(sqlCount, q.Args...).Scan(&count)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	q.totalRows = count
+	return nil
 }

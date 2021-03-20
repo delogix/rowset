@@ -84,7 +84,7 @@ func dbExec(stmt string) {
 type Person struct {
 	Id        int            `json:"personid"`
 	LastName  string         `json:"lastname"`
-	FirstName string         `json:"firstname"`
+	FirstName string         `json:"firstname,omitempty"`
 	Title     sql.NullString `json:"title"`
 }
 
@@ -101,7 +101,10 @@ func TestSimpleQuery(t *testing.T) {
 
 	req := Request{PageIndex: 0, PageSize: 10}
 
-	res := q.GetResponse(&person, &req)
+	res, err := q.GetResponse(&person, &req)
+	if err != nil {
+		log.Println(err)
+	}
 
 	j, err := json.Marshal(&res)
 	if err != nil {
@@ -120,7 +123,10 @@ func TestFieldInStructNotFound(t *testing.T) {
 
 	req := Request{PageIndex: 0, PageSize: 10}
 
-	res := q.GetResponse(&person, &req)
+	res, err := q.GetResponse(&person, &req)
+	if err != nil {
+		log.Println(err)
+	}
 
 	j, err := json.Marshal(&res)
 	if err != nil {
@@ -139,7 +145,10 @@ func TestNullFieldInStruct(t *testing.T) {
 
 	req := Request{PageIndex: 0, PageSize: 10}
 
-	res := q.GetResponse(&person, &req)
+	res, err := q.GetResponse(&person, &req)
+	if err != nil {
+		log.Println(err)
+	}
 
 	j, err := json.Marshal(&res)
 	if err != nil {
@@ -158,7 +167,10 @@ func TestWrongSQL(t *testing.T) {
 
 	req := Request{PageIndex: 0, PageSize: 10}
 
-	res := q.GetResponse(&person, &req)
+	res, err := q.GetResponse(&person, &req)
+	if err != nil {
+		log.Println(err)
+	}
 
 	j, err := json.Marshal(&res)
 	if err != nil {
@@ -177,7 +189,10 @@ func TestPageIndex(t *testing.T) {
 
 	req := Request{PageIndex: 10, PageSize: 10}
 
-	res := q.GetResponse(&person, &req)
+	res, err := q.GetResponse(&person, &req)
+	if err != nil {
+		log.Println(err)
+	}
 
 	j, err := json.Marshal(&res)
 	if err != nil {
@@ -197,7 +212,10 @@ func TestSort(t *testing.T) {
 
 	req := Request{PageIndex: 0, PageSize: 10, Sort: "lastname", Direction: "desc"}
 
-	res := q.GetResponse(&person, &req)
+	res, err := q.GetResponse(&person, &req)
+	if err != nil {
+		log.Println(err)
+	}
 
 	j, err := json.Marshal(&res)
 	if err != nil {
