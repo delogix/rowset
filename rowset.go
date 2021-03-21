@@ -13,9 +13,9 @@ type Query struct {
 	SqlStr string
 	// args are the arguments that will be used in the sql statement
 	Args []interface{}
-	// Columns are the allowed public names that can be used in the search and in the order statements
+	// Allows are the allowed public names that can be used in the search and in the order statements
 	// this is a map from public column names to db column names
-	Columns map[string]string
+	Allows map[string]string
 	// filters is a array of where fields that will be added to the original statement
 	filters []string
 	// database instance
@@ -33,11 +33,11 @@ type Request struct {
 	// Number of item to show in one page
 	PageSize int `json:"pageSize"`
 	// Search is a map from external variable name and search value
-	Search map[string]string `json:"tableSearch"`
-	// Sort is the order by ( externl variable name) in the sql statement
-	Sort string `json:"columnSort"`
+	Search map[string]string `json:"search"`
+	// Sort is the order by ( external variable name) in the sql statement
+	Sort string `json:"sort"`
 	// Sort direction asc,desc
-	Direction string `json:"columnDirection"`
+	Direction string `json:"direction"`
 }
 
 // the sql statement breaked in parts
@@ -52,8 +52,8 @@ type statement struct {
 
 func NewQuery(db *sql.DB, sqlStr string, args ...interface{}) *Query {
 	q := Query{SqlStr: sqlStr, Args: args, db: db}
-	q.stmt = statement{fields: "", from: "", where: "", orderBy: "", groupBy: "", direction: ""}
-	q.Columns = make(map[string]string)
+	//q.stmt = statement{fields: "", from: "", where: "", orderBy: "", groupBy: "", direction: ""}
+	q.Allows = make(map[string]string)
 	return &q
 }
 
@@ -63,16 +63,16 @@ func (q *Query) SetArgs(args ...interface{}) {
 }
 
 // Filter adds a search filter to the statement
-func (q *Query) Filter(fieldname string, value string) {
+func (q *Query) Search(fieldname string, value string) {
 	q.filters = append(q.filters, fieldname)
 	q.Args = append(q.Args, fmt.Sprint(value, "%"))
 }
 
 // AllowColumn is a dbField that is allowed to be searched or sorted
 // the name of the dbField should not be a alias, use the prefix if needed.
-// example:  q.Columns["personname"] = "p.name"
+// example:  q.Allows["personname"] = "p.name"
 func (q *Query) AllowColumn(jsonName string, dbField string) {
-	q.Columns[jsonName] = dbField
+	q.Allows[jsonName] = dbField
 }
 
 // GetRows - Returns the response for paging and the db record set
@@ -93,7 +93,7 @@ func (q *Query) GetRows(req *Request) (*sql.Rows, error) {
 
 	// Column Sorting
 	if req.Sort != "" && req.Direction != "" {
-		if dbcol, ok := q.Columns[req.Sort]; ok {
+		if dbcol, ok := q.Allows[req.Sort]; ok {
 			q.stmt.orderBy = dbcol
 			q.stmt.direction = req.Direction
 		}
@@ -191,10 +191,10 @@ func (q *Query) getStatement() string {
 // AddSearch - add in the where array all values that are in search and are not empty
 func (q *Query) addSearch(search map[string]string) {
 	for k, v := range search {
-		// get the db column name from the allowed Columns MAP
-		if dbcol, ok := q.Columns[k]; ok {
+		// get the db column name from the allowed Allows MAP
+		if dbcol, ok := q.Allows[k]; ok {
 			if v != "" {
-				q.Filter(dbcol, v)
+				q.Search(dbcol, v)
 			}
 		}
 	}

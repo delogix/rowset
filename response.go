@@ -7,11 +7,11 @@ import (
 	"strings"
 )
 
-// Response the result sent to the client
+// Response the result sent sended to the client
 type Response struct {
-	// Total recors found in result set
+	// Total records found in the result set
 	TotalRows int `json:"totalRows"`
-	// Items to retun to the client, max 10
+	// Items returned to the client
 	Rows interface{} `json:"rows"`
 }
 

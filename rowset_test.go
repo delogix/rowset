@@ -25,8 +25,7 @@ func ConnectDB() {
 
 	dsn := os.Getenv("MYSQL_DSN")
 	if dsn == "" {
-
-		log.Fatalf("mysql dsn is not configured in your environment %v", dsn)
+		log.Fatalf("var MYSQL_DSN is not configured in your shell environment %v", dsn)
 	}
 
 	db, err = sql.Open("mysql", dsn)
@@ -52,16 +51,9 @@ func createTables() {
 		created timestamp default now()
 	)`)
 
-	dbExec(`CREATE TABLE t_address (
-		addressid int,
-		personid int,
-		country text,
-		city text NULL
-	)`)
 }
 func dropTables() {
 	dbExec(`DROP TABLE IF EXISTS t_person`)
-	dbExec(`DROP TABLE IF EXISTS t_address`)
 }
 
 func loadFixture() {
@@ -86,6 +78,8 @@ type Person struct {
 	LastName  string         `json:"lastname"`
 	FirstName string         `json:"firstname,omitempty"`
 	Title     sql.NullString `json:"title"`
+	Rating    float32        `json:"rating"`
+	Gender    string
 }
 
 type NullDate struct {
@@ -103,18 +97,18 @@ func TestSimpleQuery(t *testing.T) {
 
 	res, err := q.GetResponse(&person, &req)
 	if err != nil {
-		log.Println(err)
+		t.Error(err)
 	}
 
-	j, err := json.Marshal(&res)
+	_, err = json.Marshal(&res)
 	if err != nil {
-		log.Println(err)
+		t.Error(err)
 	}
-	log.Printf("RESULT: %s", j)
+	//log.Printf("RESULT: %s", j)
 
 }
 
-func TestFieldInStructNotFound(t *testing.T) {
+func TestFieldInStructJsonTagNotFound(t *testing.T) {
 
 	person := Person{}
 
@@ -124,15 +118,15 @@ func TestFieldInStructNotFound(t *testing.T) {
 	req := Request{PageIndex: 0, PageSize: 10}
 
 	res, err := q.GetResponse(&person, &req)
-	if err != nil {
-		log.Println(err)
+	if err == nil {
+		t.Error("expected mapping gender error! but no error found")
 	}
 
-	j, err := json.Marshal(&res)
+	_, err = json.Marshal(&res)
 	if err != nil {
-		log.Println(err)
+		t.Error(err)
 	}
-	log.Printf("RESULT: %s", j)
+	//log.Printf("RESULT: %s", j)
 
 }
 
@@ -147,14 +141,14 @@ func TestNullFieldInStruct(t *testing.T) {
 
 	res, err := q.GetResponse(&person, &req)
 	if err != nil {
-		log.Println(err)
+		t.Error(err)
 	}
 
-	j, err := json.Marshal(&res)
+	_, err = json.Marshal(&res)
 	if err != nil {
-		log.Println(err)
+		t.Error(err)
 	}
-	log.Printf("RESULT: %s", j)
+	//log.Printf("RESULT: %s", j)
 
 }
 
@@ -169,15 +163,14 @@ func TestWrongSQL(t *testing.T) {
 
 	res, err := q.GetResponse(&person, &req)
 	if err != nil {
-		log.Println(err)
+		t.Error(err)
 	}
 
-	j, err := json.Marshal(&res)
+	_, err = json.Marshal(&res)
 	if err != nil {
-		log.Println(err)
+		t.Error(err)
 	}
-	log.Printf("RESULT: %s", j)
-
+	//log.Printf("RESULT: %s", j)
 }
 
 func TestPageIndex(t *testing.T) {
@@ -191,14 +184,14 @@ func TestPageIndex(t *testing.T) {
 
 	res, err := q.GetResponse(&person, &req)
 	if err != nil {
-		log.Println(err)
+		t.Error(err)
 	}
 
-	j, err := json.Marshal(&res)
+	_, err = json.Marshal(&res)
 	if err != nil {
-		log.Println(err)
+		t.Error(err)
 	}
-	log.Printf("RESULT: %s", j)
+	//log.Printf("RESULT: %s", j)
 
 }
 
@@ -214,13 +207,36 @@ func TestSort(t *testing.T) {
 
 	res, err := q.GetResponse(&person, &req)
 	if err != nil {
-		log.Println(err)
+		t.Error(err)
 	}
 
-	j, err := json.Marshal(&res)
+	_, err = json.Marshal(&res)
 	if err != nil {
-		log.Println(err)
+		t.Error(err)
 	}
-	log.Printf("RESULT: %s", j)
+	//log.Printf("RESULT: %s", j)
+
+}
+
+func TestSearch(t *testing.T) {
+
+	person := Person{}
+
+	sqlStr := "select personid, firstname, lastname from t_person p "
+	q := NewQuery(db, sqlStr)
+	q.Search("lastname", "pan")
+
+	req := Request{PageIndex: 0, PageSize: 10, Sort: "lastname", Direction: "desc"}
+
+	res, err := q.GetResponse(&person, &req)
+	if err != nil {
+		t.Error(err)
+	}
+
+	_, err = json.Marshal(&res)
+	if err != nil {
+		t.Error(err)
+	}
+	//log.Printf("RESULT: %s", j)
 
 }
