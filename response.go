@@ -16,73 +16,65 @@ type Response struct {
 }
 
 // GetResponse  will return the Response struct
-func (t *Query) GetResponse(dest interface{}, req *Request) (*Response, error) {
+func (q *Query) GetResponse(req *Request, dest interface{}) (*Response, error) {
+	q.dest = dest
 
-	v := reflect.ValueOf(dest).Elem()
-	if v.Kind() != reflect.Struct {
-		return nil, fmt.Errorf("must pass a struct and not pointer as dest in GetResponse")
-	}
-
-	rows, err := t.GetRows(req)
+	rows, err := q.GetRows(req)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	rs, err := t.rowsToStruct(dest, rows)
+	rs, err := q.rowsToStruct(rows)
 	if err != nil {
 		return nil, err
 	}
-	resp := Response{Rows: rs, TotalRows: t.totalRows}
+	resp := Response{Rows: rs, TotalRows: q.totalRows}
 	return &resp, nil
 }
 
-func (q *Query) rowsToStruct(dest interface{}, rows *sql.Rows) ([]interface{}, error) {
+func (q *Query) rowsToStruct(rows *sql.Rows) ([]interface{}, error) {
 
 	columnNames, err := rows.Columns()
 	if err != nil {
 		return nil, err
 	}
 
-	maps, err := dbFieldToStructField(dest, rows)
+	maps, err := q.dbFieldToStructField(rows)
 	if err != nil {
 		return nil, err
 	}
 
-	base := reflect.TypeOf(dest).Elem()
-
+	t := reflect.TypeOf(q.dest)
 	var rs []interface{}
+
 	for rows.Next() {
 		// clone dest
-		v := reflect.New(base).Elem()
-
+		n := reflect.New(t).Elem()
 		pointers := make([]interface{}, len(columnNames))
+
 		for i := range columnNames {
-			field := v.Field(maps[i])
-			if !field.IsValid() {
-				return nil, fmt.Errorf("struct field position %v is not valid", i)
-			}
-			pointers[i] = field.Addr().Interface()
+			pointers[i] = n.Field(maps[i]).Addr().Interface()
 		}
 		err := rows.Scan(pointers...)
 		if err != nil {
 			return nil, err
 		}
-		rs = append(rs, pointers)
+		rs = append(rs, n.Interface())
 	}
 	return rs, nil
 }
 
 // creates a array with the field positions in the db query and
 // the corresponding Struct position from the json tag
-func dbFieldToStructField(dest interface{}, rows *sql.Rows) ([]int, error) {
+func (q *Query) dbFieldToStructField(rows *sql.Rows) ([]int, error) {
 	columnNames, err := rows.Columns()
 	if err != nil {
 		return nil, err
 	}
 	seq := make([]int, len(columnNames))
 	for i, name := range columnNames {
-		index, err := getFieldIndexFromTag(dest, name)
+		index, err := q.getFieldIndexFromTag(name)
 		if err != nil {
 			return nil, fmt.Errorf("mapping from dbfield '%s' to struct failed, %s", name, err)
 		}
@@ -91,8 +83,8 @@ func dbFieldToStructField(dest interface{}, rows *sql.Rows) ([]int, error) {
 	return seq, nil
 }
 
-func getFieldIndexFromTag(dest interface{}, jsonName string) (int, error) {
-	t := reflect.TypeOf(dest).Elem()
+func (q *Query) getFieldIndexFromTag(jsonName string) (int, error) {
+	t := reflect.TypeOf(q.dest)
 	for i := 0; i < t.NumField(); i++ {
 		if name, ok := t.Field(i).Tag.Lookup("json"); ok {
 			names := strings.Split(name, ",")

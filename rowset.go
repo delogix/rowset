@@ -7,6 +7,8 @@ import (
 	"strings"
 )
 
+type Record func() interface{}
+
 // Query  saves the SQL statement and arguments
 type Query struct {
 	// Sql the original statement
@@ -24,6 +26,8 @@ type Query struct {
 	stmt statement
 	// total rows affected by the current statement
 	totalRows int
+	// the struct to use for reflection when scanning the DB resultset
+	dest interface{}
 }
 
 // Request have the parameters used to build the page number (pageIndex) requested

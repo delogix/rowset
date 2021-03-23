@@ -74,37 +74,46 @@ func dbExec(stmt string) {
 }
 
 type Person struct {
-	Id        int            `json:"personid"`
-	LastName  string         `json:"lastname"`
-	FirstName string         `json:"firstname,omitempty"`
-	Title     sql.NullString `json:"title"`
-	Rating    float32        `json:"rating"`
+	Id        int     `json:"personid"`
+	LastName  string  `json:"lastname"`
+	FirstName string  `json:"firstname"`
+	Title     string  `json:"title"`
+	Rating    float32 `json:"rating"`
 	Gender    string
+}
+
+func (p *Person) Clone() *Person {
+	return &Person{}
 }
 
 type NullDate struct {
 	mysql.NullTime
 }
 
+func NewPerson() interface{} {
+	return new(Person)
+}
+
 func TestSimpleQuery(t *testing.T) {
 
-	person := Person{}
+	//person := Person{}
 
 	sqlStr := "select personid, firstname, lastname from t_person "
 	q := NewQuery(db, sqlStr)
 
 	req := Request{PageIndex: 0, PageSize: 10}
 
-	res, err := q.GetResponse(&person, &req)
+	p := Person{}
+	res, err := q.GetResponse(&req, p)
 	if err != nil {
 		t.Error(err)
 	}
 
-	_, err = json.Marshal(&res)
-	if err != nil {
-		t.Error(err)
+	j, err1 := json.Marshal(&res)
+	if err1 != nil {
+		t.Error(err1)
 	}
-	//log.Printf("RESULT: %s", j)
+	log.Printf("test RESULT: %s", j)
 
 }
 
@@ -117,7 +126,7 @@ func TestFieldInStructJsonTagNotFound(t *testing.T) {
 
 	req := Request{PageIndex: 0, PageSize: 10}
 
-	res, err := q.GetResponse(&person, &req)
+	res, err := q.GetResponse(&req, person)
 	if err == nil {
 		t.Error("expected mapping gender error! but no error found")
 	}
@@ -139,7 +148,7 @@ func TestNullFieldInStruct(t *testing.T) {
 
 	req := Request{PageIndex: 0, PageSize: 10}
 
-	res, err := q.GetResponse(&person, &req)
+	res, err := q.GetResponse(&req, person)
 	if err != nil {
 		t.Error(err)
 	}
@@ -161,7 +170,7 @@ func TestWrongSQL(t *testing.T) {
 
 	req := Request{PageIndex: 0, PageSize: 10}
 
-	res, err := q.GetResponse(&person, &req)
+	res, err := q.GetResponse(&req, person)
 	if err != nil {
 		t.Error(err)
 	}
@@ -182,7 +191,7 @@ func TestPageIndex(t *testing.T) {
 
 	req := Request{PageIndex: 10, PageSize: 10}
 
-	res, err := q.GetResponse(&person, &req)
+	res, err := q.GetResponse(&req, person)
 	if err != nil {
 		t.Error(err)
 	}
@@ -205,7 +214,7 @@ func TestSort(t *testing.T) {
 
 	req := Request{PageIndex: 0, PageSize: 10, Sort: "lastname", Direction: "desc"}
 
-	res, err := q.GetResponse(&person, &req)
+	res, err := q.GetResponse(&req, person)
 	if err != nil {
 		t.Error(err)
 	}
@@ -228,7 +237,7 @@ func TestSearch(t *testing.T) {
 
 	req := Request{PageIndex: 0, PageSize: 10, Sort: "lastname", Direction: "desc"}
 
-	res, err := q.GetResponse(&person, &req)
+	res, err := q.GetResponse(&req, person)
 	if err != nil {
 		t.Error(err)
 	}
@@ -240,3 +249,42 @@ func TestSearch(t *testing.T) {
 	//log.Printf("RESULT: %s", j)
 
 }
+
+/*
+func TestGetResults(t *testing.T) {
+
+	p := Person{}
+	j, _ := json.Marshal(&p)
+	log.Printf("persons: %s", j)
+
+	rows := GetResults(db, "select firstname,lastname from t_person", p)
+	j, _ = json.Marshal(&rows)
+	log.Printf("persons: %s", j)
+}
+
+func GetResults(db *sql.DB, stmt string, p interface{}) []interface{} {
+
+	rows, err := db.Query(stmt)
+	if err != nil {
+		log.Fatal(err)
+	}
+	t := reflect.TypeOf(p)
+
+	var rs []interface{}
+	for rows.Next() {
+		// create new var
+		n := reflect.New(t).Elem()
+
+		pointers := make([]interface{}, 2)
+		pointers[0] = n.Field(1).Addr().Interface()
+		pointers[1] = n.Field(2).Addr().Interface()
+
+		err := rows.Scan(pointers...)
+		if err != nil {
+			log.Fatal(err)
+		}
+		rs = append(rs, n.Interface())
+	}
+	return rs
+}
+*/
