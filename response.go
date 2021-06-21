@@ -16,6 +16,12 @@ type Response struct {
 }
 
 // GetResponse  will return the Response struct
+func (q *Query) GetResponseFromStruct(req *Request, arrStruct interface{}) (*Response, error) {
+	resp := Response{Rows: arrStruct, TotalRows: q.totalRows}
+	return &resp, nil
+}
+
+// GetResponse  will return the Response struct
 func (q *Query) GetResponse(req *Request, dest interface{}) (*Response, error) {
 	q.dest = dest
 

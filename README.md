@@ -1,9 +1,9 @@
 # rowset
 
-rowset is a library which provides functionality for data pagination on the clients and executing a SQL Query on the server
-* client sends a JSON request 
-* Server handles the request and executes the SQL Query
-* Server responses with a JSON rowset
+rowset is a library which provides functionality for data pagination with search capabilities on the clients like Angular and executing a SQL Query on the server
+* client sends a JSON rowset.Request 
+* Server handles the request and executing the SQL Query with search parameters and pagination
+* Server responses with a JSON rowset.Response
 
 Major concepts are:
 
@@ -26,11 +26,33 @@ Sql statement with inner selects are currently not allowed
 SELECT id, name FROM mytable where name like select name from othertable;
 ```
 
+## struct
+
+```go
+
+// Request have the parameters used to build the page number (pageIndex) requested
+type Request struct {
+	PageIndex   int                 `json:"pageIndex"`
+	PageSize    int                 `json:"pageSize"`
+	Search      map[string]string   `json:"search"`
+	Sort        string              `json:"sort"`
+	Direction   string              `json:"direction"`
+}
+
+
+// Response the result sent sended to the client
+type Response struct {
+	TotalRows   int             `json:"totalRows"`
+	Rows        interface{}     `json:"rows"`
+}
+```
+
+
 
 ## usage
 
 
-```sql
+```go
 
 type Person struct {
 	Id        int            `json:"personid"`
@@ -39,15 +61,13 @@ type Person struct {
 }
 
 
-func SimpleQuery(db *sql.DB) {
+func SimpleExample(db *sql.DB) {
 
     req := Request{PageIndex: 0, PageSize: 10}
+    
+    q := NewQuery(db, "select personid, firstname, lastname from t_person")
 
-    sqlStr := "select personid, firstname, lastname from t_person "
-    q := NewQuery(db, sqlStr)
-
-
-    res := q.GetResponse(&Person{}, &req)
+    res := q.GetResponse( &req, Person{} )
 
     j, err := json.Marshal(&res)
     if err != nil {
