@@ -173,15 +173,16 @@ func (q *Query) setWhere() {
 
 func (q *Query) setIns(req *Request) {
 	if len(req.Ins) > 0 {
-		for fieldname, ids := range req.Ins {
-			if len(ids) > 0 {
-				insStr := q.arrayToString(ids, ",")
-				in := fieldname + " in ( " + insStr + ")"
-
-				if q.stmt.where != "" {
-					q.stmt.where = q.stmt.where + " and " + in
-				} else {
-					q.stmt.where = in
+		for jsonName, ids := range req.Ins {
+			if dbcol, ok := q.Allows[jsonName]; ok {
+				if len(ids) > 0 {
+					insStr := q.arrayToString(ids, ",")
+					in := dbcol + " in ( " + insStr + ")"
+					if q.stmt.where != "" {
+						q.stmt.where = q.stmt.where + " and " + in
+					} else {
+						q.stmt.where = in
+					}
 				}
 			}
 		}

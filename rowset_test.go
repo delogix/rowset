@@ -118,16 +118,17 @@ func TestSimpleQuery(t *testing.T) {
 
 }
 
-func TestSimpleQueryIn(t *testing.T) {
+func TestSimpleInsQuery(t *testing.T) {
 
 	//person := Person{}
 
-	sqlStr := "select personid, firstname, lastname from t_person "
+	sqlStr := "select personid, firstname, lastname from t_person p "
 	q := NewQuery(db, sqlStr)
+	q.AllowColumn("pid", "p.personid")
 
 	req := Request{PageIndex: 0, PageSize: 10}
 
-	req.Ins = map[string][]int{"personid": {2}}
+	req.Ins = map[string][]int{"pid": {2, 3}}
 
 	p := Person{}
 	res, err := q.GetResponse(&req, p)
