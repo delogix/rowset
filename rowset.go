@@ -38,6 +38,8 @@ type Request struct {
 	PageSize int `json:"pageSize"`
 	// Search is a map from external variable name and search value
 	Search map[string]string `json:"search"`
+	// Search is a map from external variable name and search value
+	Ins map[string][]int `json:"ins"`
 	// Sort is the order by ( external variable name) in the sql statement
 	Sort string `json:"sort"`
 	// Sort direction asc,desc
@@ -90,6 +92,8 @@ func (q *Query) GetRows(req *Request) (*sql.Rows, error) {
 	q.addSearch(req.Search)
 	// rebuild statement with where filters
 	q.setWhere()
+	q.setIns(req)
+
 	err := q.setTotalRows()
 	if err != nil {
 		return nil, err
@@ -165,6 +169,27 @@ func (q *Query) setWhere() {
 		}
 	}
 
+}
+
+func (q *Query) setIns(req *Request) {
+	if len(req.Ins) > 0 {
+		for fieldname, ids := range req.Ins {
+			if len(ids) > 0 {
+				insStr := q.arrayToString(ids, ",")
+				in := fieldname + " in ( " + insStr + ")"
+
+				if q.stmt.where != "" {
+					q.stmt.where = q.stmt.where + " and " + in
+				} else {
+					q.stmt.where = in
+				}
+			}
+		}
+	}
+}
+
+func (q *Query) arrayToString(a []int, delim string) string {
+	return strings.Trim(strings.Replace(fmt.Sprint(a), " ", delim, -1), "[]")
 }
 
 func (q *Query) getCountStatement() string {

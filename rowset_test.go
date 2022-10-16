@@ -25,7 +25,8 @@ func ConnectDB() {
 
 	dsn := os.Getenv("MYSQL_DSN")
 	if dsn == "" {
-		log.Fatalf("var MYSQL_DSN is not configured in your shell environment %v", dsn)
+		// log.Fatalf("var MYSQL_DSN is not configured in your shell environment %v", dsn)
+		dsn = "root:pass@tcp(127.0.0.1:3306)/terra_pflege?parseTime=true"
 	}
 
 	db, err = sql.Open("mysql", dsn)
@@ -114,6 +115,32 @@ func TestSimpleQuery(t *testing.T) {
 		t.Error(err1)
 	}
 	log.Printf("test RESULT: %s", j)
+
+}
+
+func TestSimpleQueryIn(t *testing.T) {
+
+	//person := Person{}
+
+	sqlStr := "select personid, firstname, lastname from t_person "
+	q := NewQuery(db, sqlStr)
+
+	req := Request{PageIndex: 0, PageSize: 10}
+
+	req.Ins = map[string][]int{"personid": {2}}
+
+	p := Person{}
+	res, err := q.GetResponse(&req, p)
+	if err != nil {
+		t.Error(err)
+	}
+
+	j, err1 := json.Marshal(&res)
+	if err1 != nil {
+		t.Error(err1)
+	}
+	log.Printf("test RESULT: %s", j)
+	log.Println("End")
 
 }
 

@@ -35,6 +35,7 @@ type Request struct {
 	PageIndex   int                 `json:"pageIndex"`
 	PageSize    int                 `json:"pageSize"`
 	Search      map[string]string   `json:"search"`
+	Ins 		map[string][]int 	`json:"ins"`
 	Sort        string              `json:"sort"`
 	Direction   string              `json:"direction"`
 }
