@@ -38,8 +38,10 @@ type Request struct {
 	PageSize int `json:"pageSize"`
 	// Search is a map from external variable name and search value
 	Search map[string]string `json:"search"`
-	// Search is a map from external variable name and search value
+	// Ins is a map from external variable name to array of integers
 	Ins map[string][]int `json:"ins"`
+	// Ins is a map from external variable name to array of integers
+	Likes map[string][]string `json:"likes"`
 	// Sort is the order by ( external variable name) in the sql statement
 	Sort string `json:"sort"`
 	// Sort direction asc,desc
@@ -93,6 +95,7 @@ func (q *Query) GetRows(req *Request) (*sql.Rows, error) {
 	// rebuild statement with where filters
 	q.setWhere()
 	q.setIns(req)
+	q.setLikes(req)
 
 	err := q.setTotalRows()
 	if err != nil {
@@ -176,7 +179,7 @@ func (q *Query) setIns(req *Request) {
 		for jsonName, ids := range req.Ins {
 			if dbcol, ok := q.Allows[jsonName]; ok {
 				if len(ids) > 0 {
-					insStr := q.arrayToString(ids, ",")
+					insStr := q.arrayIntToString(ids, ",")
 					in := dbcol + " in ( " + insStr + ")"
 					if q.stmt.where != "" {
 						q.stmt.where = q.stmt.where + " and " + in
@@ -189,7 +192,28 @@ func (q *Query) setIns(req *Request) {
 	}
 }
 
-func (q *Query) arrayToString(a []int, delim string) string {
+func (q *Query) setLikes(req *Request) {
+	if len(req.Likes) > 0 {
+		for jsonName, data := range req.Likes {
+			if dbcol, ok := q.Allows[jsonName]; ok {
+				if len(data) > 0 {
+					likeStr := q.arrayStrToString(data, "|^")
+					like := dbcol + " rlike '^" + likeStr + "' "
+					if q.stmt.where != "" {
+						q.stmt.where = q.stmt.where + " and " + like
+					} else {
+						q.stmt.where = like
+					}
+				}
+			}
+		}
+	}
+}
+
+func (q *Query) arrayIntToString(a []int, delim string) string {
+	return strings.Trim(strings.Replace(fmt.Sprint(a), " ", delim, -1), "[]")
+}
+func (q *Query) arrayStrToString(a []string, delim string) string {
 	return strings.Trim(strings.Replace(fmt.Sprint(a), " ", delim, -1), "[]")
 }
 

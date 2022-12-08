@@ -278,41 +278,26 @@ func TestSearch(t *testing.T) {
 
 }
 
-/*
-func TestGetResults(t *testing.T) {
+func TestLikes(t *testing.T) {
 
-	p := Person{}
-	j, _ := json.Marshal(&p)
-	log.Printf("persons: %s", j)
+	person := Person{}
 
-	rows := GetResults(db, "select firstname,lastname from t_person", p)
-	j, _ = json.Marshal(&rows)
-	log.Printf("persons: %s", j)
-}
+	sqlStr := "select personid, firstname, lastname from t_person "
+	q := NewQuery(db, sqlStr)
+	q.AllowColumn("lastname", "lastname")
 
-func GetResults(db *sql.DB, stmt string, p interface{}) []interface{} {
+	req := Request{PageIndex: 0, PageSize: 10, Sort: "lastname", Direction: "desc"}
+	req.Likes = map[string][]string{"lastname": {"da", "de", "di"}}
 
-	rows, err := db.Query(stmt)
+	res, err := q.GetResponse(&req, person)
 	if err != nil {
-		log.Fatal(err)
+		t.Error(err)
 	}
-	t := reflect.TypeOf(p)
 
-	var rs []interface{}
-	for rows.Next() {
-		// create new var
-		n := reflect.New(t).Elem()
-
-		pointers := make([]interface{}, 2)
-		pointers[0] = n.Field(1).Addr().Interface()
-		pointers[1] = n.Field(2).Addr().Interface()
-
-		err := rows.Scan(pointers...)
-		if err != nil {
-			log.Fatal(err)
-		}
-		rs = append(rs, n.Interface())
+	_, err = json.Marshal(&res)
+	if err != nil {
+		t.Error(err)
 	}
-	return rs
+	//log.Printf("RESULT: %s", j)
+
 }
-*/
