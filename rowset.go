@@ -7,7 +7,15 @@ import (
 	"strings"
 )
 
-type Record func() interface{}
+// package-level compiled regexes — avoids recompiling on every call
+var (
+	reBlank    = regexp.MustCompile(`[[:blank:]]`)
+	reSpace    = regexp.MustCompile(`[[:space:]]{2,}`)
+	reSelect   = regexp.MustCompile(`(?i)select(.+)from(.+)`)
+	reOrderBy  = regexp.MustCompile(`(?i)(.+)order by(.+)`)
+	reGroupBy  = regexp.MustCompile(`(?i)(.+)group by(.+)`)
+	reWhere    = regexp.MustCompile(`(?i)(.+)where(.+)`)
+)
 
 // Query  saves the SQL statement and arguments
 type Query struct {
@@ -40,11 +48,13 @@ type Request struct {
 	Search map[string]string `json:"search"`
 	// Ins is a map from external variable name to array of integers
 	Ins map[string][]int `json:"ins"`
-	// Ins is a map from external variable name to array of integers
+	// Likes is a map from external variable name to array of strings (prefix match)
 	Likes map[string][]string `json:"likes"`
-	// Sort is the order by ( external variable name) in the sql statement
+	// Equals is a map from external variable name to an exact match value
+	Equals map[string]string `json:"equals"`
+	// Sort is the order by (external variable name) in the sql statement
 	Sort string `json:"sort"`
-	// Sort direction asc,desc
+	// Direction sort direction: asc or desc
 	Direction string `json:"direction"`
 }
 
@@ -60,7 +70,6 @@ type statement struct {
 
 func NewQuery(db *sql.DB, sqlStr string, args ...interface{}) *Query {
 	q := Query{SqlStr: sqlStr, Args: args, db: db}
-	//q.stmt = statement{fields: "", from: "", where: "", orderBy: "", groupBy: "", direction: ""}
 	q.Allows = make(map[string]string)
 	return &q
 }
@@ -70,52 +79,55 @@ func (q *Query) SetArgs(args ...interface{}) {
 	q.Args = args
 }
 
-// Filter adds a search filter to the statement
+// Search adds a LIKE filter for the given db field and value
 func (q *Query) Search(fieldname string, value string) {
 	q.filters = append(q.filters, fieldname)
 	q.Args = append(q.Args, fmt.Sprint(value, "%"))
 }
 
-// AllowColumn is a dbField that is allowed to be searched or sorted
-// the name of the dbField should not be a alias, use the prefix if needed.
-// example:  q.Allows["personname"] = "p.name"
+// AllowColumn registers a db column as searchable/sortable under the given JSON name.
+// Use the table prefix when needed, e.g. q.AllowColumn("personName", "p.name")
 func (q *Query) AllowColumn(jsonName string, dbField string) {
 	q.Allows[jsonName] = dbField
 }
 
-// GetRows - Returns the response for paging and the db record set
-// the calling function of GetRows should close the DB Query
+// GetRows returns the paged sql.Rows result
 func (q *Query) GetRows(req *Request) (*sql.Rows, error) {
 	if q.SqlStr == "" {
 		return nil, fmt.Errorf("statement is not set")
 	}
-	// remove white spaces
 	q.normalizeStatement()
 	q.addSearch(req.Search)
-	// rebuild statement with where filters
 	q.setWhere()
 	q.setIns(req)
 	q.setLikes(req)
+	q.setEquals(req)
 
 	err := q.setTotalRows()
 	if err != nil {
 		return nil, err
 	}
 
-	// Column Sorting
-	if req.Sort != "" && req.Direction != "" {
+	// Column sorting — direction is validated to prevent SQL injection
+	if req.Sort != "" {
+		dir := strings.ToLower(req.Direction)
+		if dir != "asc" && dir != "desc" {
+			dir = "asc"
+		}
 		if dbcol, ok := q.Allows[req.Sort]; ok {
 			q.stmt.orderBy = dbcol
-			q.stmt.direction = req.Direction
+			q.stmt.direction = dir
 		}
 	}
 
-	// build sql statement with LIMIT
-	from := req.PageIndex * req.PageSize
+	pageSize := req.PageSize
+	if pageSize < 1 {
+		pageSize = 10
+	}
+	from := req.PageIndex * pageSize
 	stm := q.getStatement()
-	stm = fmt.Sprintf("%s LIMIT %d,%d", stm, from, req.PageSize)
+	stm = fmt.Sprintf("%s LIMIT %d,%d", stm, from, pageSize)
 
-	// Get Rows, looping the rows will be done in the calling function or by calling GetResponse instead of GetRows
 	rows, err := q.db.Query(stm, q.Args...)
 	if err != nil {
 		return nil, err
@@ -123,32 +135,26 @@ func (q *Query) GetRows(req *Request) (*sql.Rows, error) {
 	return rows, nil
 }
 
-// remove tabs and whitespaces from the original statement
+// normalizeStatement collapses all whitespace runs to a single space
 func (q *Query) normalizeStatement() {
-	sql := []byte(q.SqlStr)
-	// remove tabs
-	blanks := regexp.MustCompile("[[:blank:]]")
-	sql = blanks.ReplaceAll(sql, []byte(" "))
-	//remove white spaces
-	tabs := regexp.MustCompile("[[:space:]]{2,}")
-	sql = tabs.ReplaceAll(sql, []byte(" "))
-	// byte to string
-	q.SqlStr = string(sql[:])
+	s := reBlank.ReplaceAllString(q.SqlStr, " ")
+	s = reSpace.ReplaceAllString(s, " ")
+	q.SqlStr = strings.TrimSpace(s)
 }
 
-// break the sql string in query parts
+// breakSqlInParts splits the SQL string into its structural parts.
+// Uses case-insensitive matching so both upper- and lower-case SQL keywords are handled.
 func (q *Query) breakSqlInParts() {
 	more := ""
-	q.stmt.fields, more = findMatch(q.SqlStr, "select(.+)from(.+)")
-	more, q.stmt.orderBy = findMatch(more, "(.+)order by(.+)")
-	more, q.stmt.groupBy = findMatch(more, "(.+)group by(.+)")
-	more, q.stmt.where = findMatch(more, "(.+)where(.+)")
+	q.stmt.fields, more = findMatchRe(q.SqlStr, reSelect)
+	more, q.stmt.orderBy = findMatchRe(more, reOrderBy)
+	more, q.stmt.groupBy = findMatchRe(more, reGroupBy)
+	more, q.stmt.where = findMatchRe(more, reWhere)
 	q.stmt.from = more
 }
 
-func findMatch(haystack string, match string) (string, string) {
-	reg := regexp.MustCompile(match)
-	x := reg.FindStringSubmatch(haystack)
+func findMatchRe(haystack string, re *regexp.Regexp) (string, string) {
+	x := re.FindStringSubmatch(haystack)
 	if x != nil && x[2] != "" {
 		return x[1], x[2]
 	}
@@ -157,13 +163,11 @@ func findMatch(haystack string, match string) (string, string) {
 
 func (q *Query) setWhere() {
 	q.breakSqlInParts()
-	//  add where clause if filters found
 	if len(q.filters) > 0 {
 		f := make([]string, len(q.filters))
 		for i, filter := range q.filters {
 			f[i] = filter + " like ? "
 		}
-		// join array to string
 		where := strings.Join(f, " and ")
 		if q.stmt.where != "" {
 			q.stmt.where = q.stmt.where + " and " + where
@@ -171,53 +175,71 @@ func (q *Query) setWhere() {
 			q.stmt.where = where
 		}
 	}
-
 }
 
 func (q *Query) setIns(req *Request) {
-	if len(req.Ins) > 0 {
-		for jsonName, ids := range req.Ins {
-			if dbcol, ok := q.Allows[jsonName]; ok {
-				if len(ids) > 0 {
-					insStr := q.arrayIntToString(ids, ",")
-					in := dbcol + " in ( " + insStr + ")"
-					if q.stmt.where != "" {
-						q.stmt.where = q.stmt.where + " and " + in
-					} else {
-						q.stmt.where = in
-					}
+	for jsonName, ids := range req.Ins {
+		if dbcol, ok := q.Allows[jsonName]; ok {
+			if len(ids) > 0 {
+				placeholders := make([]string, len(ids))
+				for i, id := range ids {
+					placeholders[i] = "?"
+					q.Args = append(q.Args, id)
 				}
+				in := dbcol + " in (" + strings.Join(placeholders, ",") + ")"
+				q.stmt.where = appendWhere(q.stmt.where, in)
 			}
 		}
 	}
 }
 
+// setLikes builds a RLIKE condition for each allowed column.
+// User-supplied values are escaped with regexp.QuoteMeta to prevent regex injection.
 func (q *Query) setLikes(req *Request) {
-	if len(req.Likes) > 0 {
-		for jsonName, data := range req.Likes {
-			if dbcol, ok := q.Allows[jsonName]; ok {
-				if len(data) > 0 {
-					likeStr := q.arrayStrToString(data, "|^")
-					like := dbcol + " rlike '^" + likeStr + "' "
-					if q.stmt.where != "" {
-						q.stmt.where = q.stmt.where + " and " + like
-					} else {
-						q.stmt.where = like
-					}
+	for jsonName, data := range req.Likes {
+		if dbcol, ok := q.Allows[jsonName]; ok {
+			if len(data) > 0 {
+				escaped := make([]string, len(data))
+				for i, s := range data {
+					escaped[i] = regexp.QuoteMeta(s)
+				}
+				likeStr := strings.Join(escaped, "|^")
+				like := dbcol + " rlike '^" + likeStr + "' "
+				if q.stmt.where != "" {
+					q.stmt.where = q.stmt.where + " and " + like
+				} else {
+					q.stmt.where = like
 				}
 			}
 		}
 	}
 }
 
-func (q *Query) arrayIntToString(a []int, delim string) string {
-	return strings.Trim(strings.Replace(fmt.Sprint(a), " ", delim, -1), "[]")
+func (q *Query) setEquals(req *Request) {
+	for jsonName, val := range req.Equals {
+		if dbcol, ok := q.Allows[jsonName]; ok {
+			if val != "" {
+				q.stmt.where = appendWhere(q.stmt.where, dbcol+" = ?")
+				q.Args = append(q.Args, val)
+			}
+		}
+	}
 }
-func (q *Query) arrayStrToString(a []string, delim string) string {
-	return strings.Trim(strings.Replace(fmt.Sprint(a), " ", delim, -1), "[]")
+
+func appendWhere(existing, clause string) string {
+	if existing != "" {
+		return existing + " and " + clause
+	}
+	return clause
 }
+
 
 func (q *Query) getCountStatement() string {
+	// If the query has a GROUP BY, wrapping in a subquery gives the correct row count.
+	// Without wrapping, COUNT(*) would count groups instead of total rows.
+	if q.stmt.groupBy != "" {
+		return "select count(*) from (" + q.getBaseStatement() + ") as _count"
+	}
 	sql := "select count(*) from " + q.stmt.from
 	if q.stmt.where != "" {
 		sql += " where " + q.stmt.where
@@ -225,16 +247,30 @@ func (q *Query) getCountStatement() string {
 	return sql
 }
 
-func (q *Query) getStatement() string {
-	sql := "select " + q.stmt.fields + "from " + q.stmt.from
+// getBaseStatement returns the query without ORDER BY and LIMIT — used for counting
+func (q *Query) getBaseStatement() string {
+	sql := "select " + q.stmt.fields + " from " + q.stmt.from
 	if q.stmt.where != "" {
-		sql += "where " + q.stmt.where
+		sql += " where " + q.stmt.where
 	}
 	if q.stmt.groupBy != "" {
-		sql += "group by " + q.stmt.groupBy
+		sql += " group by " + q.stmt.groupBy
+	}
+	return sql
+}
+
+// getStatement assembles the full SQL string from its parsed parts.
+// Each keyword clause is preceded by an explicit space to avoid concatenation errors.
+func (q *Query) getStatement() string {
+	sql := "select " + q.stmt.fields + " from " + q.stmt.from
+	if q.stmt.where != "" {
+		sql += " where " + q.stmt.where
+	}
+	if q.stmt.groupBy != "" {
+		sql += " group by " + q.stmt.groupBy
 	}
 	if q.stmt.orderBy != "" {
-		sql += "order by " + q.stmt.orderBy
+		sql += " order by " + q.stmt.orderBy
 		if q.stmt.direction != "" {
 			sql += " " + q.stmt.direction
 		}
@@ -242,10 +278,9 @@ func (q *Query) getStatement() string {
 	return sql
 }
 
-// AddSearch - add in the where array all values that are in search and are not empty
+// addSearch maps search keys to allowed db columns and queues LIKE filters
 func (q *Query) addSearch(search map[string]string) {
 	for k, v := range search {
-		// get the db column name from the allowed Allows MAP
 		if dbcol, ok := q.Allows[k]; ok {
 			if v != "" {
 				q.Search(dbcol, v)
